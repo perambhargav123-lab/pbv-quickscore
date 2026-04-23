@@ -28,7 +28,7 @@ COLORS = {
 CONTACT_EMAIL = "bhargavperam98@gmail.com"
 CALENDLY_URL = "https://calendly.com/bhargavperam98/15min"  # update if your Calendly slug differs
 
-GCC_BENCHMARK = 2.3
+GCC_BENCHMARK = 2.1
 
 MATURITY_LEVELS = {
     1: {"name": "Ad Hoc", "color": "#FF4444", "desc": "No formal governance; reactive only"},
@@ -73,32 +73,44 @@ QUESTIONS = [
         "text": "Can your finance team identify and escalate AI errors?",
         "weak_warning": "Untrained staff either blindly trust AI (dangerous) or refuse to use it (wasted investment). Both fail.",
     },
+    {
+        "key": "shadow_ai",
+        "label": "Shadow AI Visibility",
+        "text": "Do you know how many people in your finance team use personal AI tools (ChatGPT, Claude, Gemini) for work — including on personal devices?",
+        "weak_warning": "Shadow AI is the #1 unmeasured data-leakage vector. Every employee pasting P&L data into ChatGPT is an uncontrolled cross-border transfer. UAE PDPL penalty: up to AED 5,000,000.",
+    },
+    {
+        "key": "override_tracking",
+        "label": "Override Tracking",
+        "text": "When AI suggests a journal entry or classification, do you track whether the human accepted, modified, or rejected it?",
+        "weak_warning": "Without override tracking, you can't tell if AI is wrong and humans fix it, or AI is right and humans don't trust it. Both are governance failures. Neither is measurable without the log.",
+    },
 ]
 
 
 # ============================================================
 # 3 GOVERNANCE GATES
-# Gate 1 → Data Sovereignty (Q3 = data_technology)
-# Gate 2 → Human Approval Protocol (Q2 = risk_controls)
-# Gate 3 → Output Labelling Standard (Q4 = governance_process)
+# Gate 1 → Data Sovereignty (Q3 data_technology + Q6 shadow_ai)
+# Gate 2 → Human Approval Protocol (Q2 risk_controls + Q7 override_tracking)
+# Gate 3 → Output Labelling Standard (Q4 governance_process)
 # ============================================================
 GATES = [
     {
-        "key": "data_technology",
+        "keys": ["data_technology", "shadow_ai"],
         "icon": "🔒",
         "name": "Data Sovereignty",
-        "criteria": "Data stays in confirmed jurisdiction. AI does not train on your data. Encryption + audit log.",
-        "fail": "Financial data may be processed in unknown jurisdictions, potentially training third-party models. UAE PDPL: up to AED 5,000,000.",
+        "criteria": "Data stays in confirmed jurisdiction. AI does not train on your data. Encryption + audit log. Shadow AI usage mapped.",
+        "fail": "Financial data may be processed in unknown jurisdictions — including via personal ChatGPT/Claude accounts — potentially training third-party models. UAE PDPL: up to AED 5,000,000.",
     },
     {
-        "key": "risk_controls",
+        "keys": ["risk_controls", "override_tracking"],
         "icon": "👤",
         "name": "Human Approval Protocol",
-        "criteria": "Every AI output has a defined approval level. No AI output acts above materiality without human sign-off.",
-        "fail": "AI could post journal entries or approve payments without human review. SOX / audit finding guaranteed.",
+        "criteria": "Every AI output has a defined approval level. No AI output acts above materiality without human sign-off. Accept/modify/reject decisions are logged.",
+        "fail": "AI could post journal entries or approve payments without human review, and override decisions are invisible. SOX / audit finding guaranteed.",
     },
     {
-        "key": "governance_process",
+        "keys": ["governance_process"],
         "icon": "🏷️",
         "name": "Output Labelling Standard",
         "criteria": "Every AI output labelled CALCULATED FACT / AI-ASSISTED / AI HYPOTHESIS, with source citation.",
@@ -161,7 +173,7 @@ st.markdown(
     """
 <div class='hero'>
   <h1>PBV Finance | AI Governance Quick Score</h1>
-  <p>5 questions. 2 minutes. See where you stand.</p>
+  <p>7 questions. 2 minutes. See where you stand.</p>
 </div>
 """,
     unsafe_allow_html=True,
@@ -169,8 +181,9 @@ st.markdown(
 st.markdown("")
 
 st.error(
-    "**86% of finance teams have encountered hallucinated AI data.** "
-    "One unvalidated output in a board report doesn't just create a restatement — "
+    "**In finance, 'mostly right' is still wrong.** "
+    "86% of finance teams have encountered hallucinated AI data. "
+    "One unvalidated output in a board report doesn't create a correction — "
     "it destroys years of trust."
 )
 
@@ -179,7 +192,7 @@ st.markdown("---")
 # ============================================================
 # QUESTIONS
 # ============================================================
-st.subheader("📋 Five Questions")
+st.subheader("📋 Seven Questions")
 st.caption("Score each from 1 (Not at all) to 5 (Fully embedded).")
 
 scores: dict[str, int] = {}
@@ -260,6 +273,34 @@ fig.update_layout(
 )
 st.plotly_chart(fig, use_container_width=True)
 
+# ------------------------------------------------------------
+# Audit Readiness Score — Q2 validation + Q4 audit trail + Q7 override tracking
+# ------------------------------------------------------------
+audit_keys = ["risk_controls", "governance_process", "override_tracking"]
+audit_score = round(sum(scores[k] for k in audit_keys) / len(audit_keys), 2)
+
+if audit_score >= 4:
+    audit_bg = COLORS["success"]
+    audit_msg = "✅ Your AI outputs would likely survive external audit"
+elif audit_score >= 3:
+    audit_bg = COLORS["warning"]
+    audit_msg = "⚠️ Auditor findings possible — gaps in traceability"
+else:
+    audit_bg = COLORS["danger"]
+    audit_msg = "❌ Your AI outputs are not audit-ready. Expect management letter points."
+
+st.markdown(
+    f"""
+<div style='text-align:center; padding:16px; border-radius:12px;
+            background:{audit_bg}; color:white; margin:16px 0;'>
+  <p style='margin:0; opacity:0.9; font-size:13px; letter-spacing:1px;'>AUDIT READINESS</p>
+  <h2 style='color:white; font-size:40px; margin:4px 0;'>{audit_score}/5</h2>
+  <p style='color:white; margin:0; font-size:15px;'>{audit_msg}</p>
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
 # Per-dimension warnings (anything ≤ 2)
 weak = [q for q in QUESTIONS if scores[q["key"]] <= 2]
 if weak:
@@ -276,7 +317,8 @@ st.subheader("🔐 3 Governance Gates")
 st.caption("Every AI output must pass all 3 gates before going live. (Based on PBV's CFO×AI Framework.)")
 
 for gate in GATES:
-    score = scores[gate["key"]]
+    gate_vals = [scores[k] for k in gate["keys"]]
+    score = min(gate_vals)  # weakest link determines gate status
     badge, badge_color = gate_status(score)
     with st.container(border=True):
         st.markdown(
@@ -298,9 +340,19 @@ st.markdown("---")
 # ============================================================
 st.subheader("🚀 Want the Full Picture?")
 st.markdown(
-    "The complete **60-question assessment** generates a board-ready report with "
-    "regulatory gap analysis, risk register, 90-day roadmap, and 6 policy templates — "
-    "the same depth Big 4 firms charge AED 50,000–150,000 for."
+    """
+**YOUR REPORT WOULD INCLUDE:**
+- → 40-page board-ready governance assessment
+- → Risk register with AED exposure per gap
+- → Shadow AI inventory and remediation plan
+- → Human override tracking protocol
+- → Auditor pre-brief package (saves 30–50% AI audit fees)
+- → 7 policy templates with SAP-specific implementation checklists
+- → Reverse Board Memo — what your Audit Committee would write if they knew everything this assessment found
+
+Same depth Big 4 firms deliver in 6–8 weeks for AED 50,000–150,000.
+**We deliver it in 15 minutes.**
+"""
 )
 
 mailto = (
@@ -324,5 +376,7 @@ st.info(
 
 st.markdown("---")
 st.caption(
-    "PBV Finance | AI Governance & Automation | Privacy-First | India · UAE · KSA · UK"
+    "PBV Finance | AI Governance & Automation | Privacy-First | "
+    "Built on: NIST AI RMF 2.0 · ISO 42001 · CBUAE 2026 Guidance | "
+    "India · UAE · KSA · UK"
 )
